@@ -40,7 +40,6 @@ class DemoDataset(DatasetTemplate):
         data_file_list = glob.glob(str(root_path / f'*{self.ext}')) if self.root_path.is_dir() else [self.root_path]
 
         data_file_list.sort()
-        # print("-------------------------------------------------------------:  ", data_file_list)
         self.sample_file_list = data_file_list
 
     def __len__(self):
@@ -55,7 +54,6 @@ class DemoDataset(DatasetTemplate):
         else:
             raise NotImplementedError
         (filename,extension) = os.path.splitext(os.path.split(self.sample_file_list[index])[-1])
-        # print("+++++++++++++++++++++++++++++:  ",filename)
         input_dict = {
             'points': points,
             'frame_id': index,
@@ -83,8 +81,7 @@ def parse_config():
 
 
 def main():
-    # labels_path = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data/merge_pcd_label/label2"
-    labels_path = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data_test/custom/label"
+    labels_path = "SUSTechPOINTS/data/merge_pcd_label/label2"
     map_class = {
         "1" : "Car",
         "2" : "Truck"

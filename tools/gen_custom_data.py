@@ -166,13 +166,10 @@ def merge_pcd_label(pcd_label_folder):
 
 
 if __name__ == '__main__':
-    # pcd_label_folder = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data"
-    pcd_label_folder = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data_test"
+    pcd_label_folder = "SUSTechPOINTS/SUSTechPOINTS/data"
     pcdfolder ,labelsfolder = merge_pcd_label(pcd_label_folder)
-    # custom_path = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data/custom"
-    custom_path = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data_test/custom"
-    # test_ratio =   0.1
-    test_ratio =   0
+    custom_path = "SUSTechPOINTS/SUSTechPOINTS/data/custom"
+    test_ratio =   0.1
     gen_custom_data(custom_path,pcdfolder,labelsfolder,test_ratio)
 
      # pcdfolder = "/home/why/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data/module1/lidar"

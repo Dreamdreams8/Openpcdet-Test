@@ -3,7 +3,7 @@
 import os
 
 if __name__ == "__main__":
-    label_path = "/home/why/mnt/github_demo/OpenPCDet/data/custom/labels"
+    label_path = "OpenPCDet/data/custom/labels"
     label_list = os.listdir(label_path)
     # l w h
     P_counts = 0

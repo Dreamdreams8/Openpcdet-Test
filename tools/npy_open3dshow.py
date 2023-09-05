@@ -3,7 +3,7 @@ import numpy as np
 
 def main():
 
-    raw_point = np.load('/home/why/mnt/github_demo/OpenPCDet/data/custom/points/25.npy') #读取1.npy数据  N*[x,y,z]
+    raw_point = np.load('OpenPCDet/data/custom/points/25.npy') #读取1.npy数据  N*[x,y,z]
     raw_point = raw_point[:, 0:3].reshape(-1, 3)
     #创建窗口对象
     vis = o3d.visualization.Visualizer()

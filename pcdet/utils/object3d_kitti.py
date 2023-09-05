@@ -3,8 +3,7 @@ import numpy as np
 
 def get_objects_from_label(label_file):
     with open(label_file, 'r') as f:
-        lines = f.readlines()
-    # print("++++++++++++++++++++++:    ", lines )    
+        lines = f.readlines()  
     objects = [Object3d(line) for line in lines]
     return objects
 

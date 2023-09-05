@@ -29,4 +29,4 @@ def pcd2bin(pcdfolder, binfolder):
         velodyne_file_new = os.path.join(des_path, filename) + '.bin'
         pl.tofile(velodyne_file_new)
 #输入一个相对于python运行脚本当前目录的pcd目录，一个bin生成存放目录
-pcd2bin("/home/why/mnt/github_demo/OpenPCDet/data/act/left", "/home/why/mnt/github_demo/OpenPCDet/data/act/left_bin")
+pcd2bin("OpenPCDet/data/act/left", "OpenPCDet/data/act/left_bin")

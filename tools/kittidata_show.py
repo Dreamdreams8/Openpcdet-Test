@@ -168,8 +168,7 @@ def pcd2bin2(pcdfolder, binfolder):
         pl.tofile(velodyne_file_new)
 
 def main():
-#     points = np.fromfile("/mnt/github_demo/OpenPCDet/data/kitti/trainning/velodyne/000008.bin", dtype=np.float32).reshape(-1, 4)
-    points = np.fromfile("/mnt/github_demo/OpenPCDet/frontlidar/1687253840.421622.bin", dtype=np.float32).reshape(-1, 4)
+    points = np.fromfile("1687253840.421622.bin", dtype=np.float32).reshape(-1, 4)
     
 
     ref_boxes=np.array([[ 14.7530,  -1.0668,  -0.7949,   3.7316,   1.5734,   1.5017,   5.9684],

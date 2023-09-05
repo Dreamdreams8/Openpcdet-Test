@@ -39,10 +39,6 @@ class DataBaseSampler(object):
 
             with open(str(db_info_path), 'rb') as f:
                 infos = pickle.load(f)
-                # print(infos)
-                # print("++++++++++++++++++++++++++class_names:  ",class_names)
-                [infos[cur_class] for cur_class in class_names]
-                # print("------------------------------------------")
                 [self.db_infos[cur_class].extend(infos[cur_class]) for cur_class in class_names]
 
         for func_name, val in sampler_cfg.PREPARE.items():
@@ -106,9 +102,6 @@ class DataBaseSampler(object):
         new_db_infos = {}
         for key, dinfos in db_infos.items():
             pre_len = len(dinfos)
-            # for info in dinfos:
-            #     print("++++++++++++++++++:   ",info.keys())
-            #     print("-----------------------:   ",removed_difficulty)
             new_db_infos[key] = [
                 info for info in dinfos
                 # if info['difficulty'] not in removed_difficulty        #del by why
@@ -370,7 +363,6 @@ class DataBaseSampler(object):
         return data_dict
 
     def add_sampled_boxes_to_scene(self, data_dict, sampled_gt_boxes, total_valid_sampled_dict, mv_height=None, sampled_gt_boxes2d=None):
-        # print("+++++++++++++++++++++++++++++++++++++++:  ", data_dict)
         gt_boxes_mask = data_dict['gt_boxes_mask']
         gt_boxes = data_dict['gt_boxes'][gt_boxes_mask]
         gt_names = data_dict['gt_names'][gt_boxes_mask]

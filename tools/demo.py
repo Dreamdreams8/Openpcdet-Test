@@ -38,7 +38,6 @@ class DemoDataset(DatasetTemplate):
         data_file_list = glob.glob(str(root_path / f'*{self.ext}')) if self.root_path.is_dir() else [self.root_path]
 
         data_file_list.sort()
-        # print("-------------------------------------------------------------:  ", data_file_list)
         self.sample_file_list = data_file_list
 
     def __len__(self):
@@ -93,10 +92,7 @@ def main():
     model.cuda()
     model.eval()
     with torch.no_grad():
-        # print("++++++++++++++++++++len(demo_dataset),", len(demo_dataset))
         for idx, data_dict in enumerate(demo_dataset):
-            
-            # print("++++++++++++++++++++data_dict,", data_dict)            
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
