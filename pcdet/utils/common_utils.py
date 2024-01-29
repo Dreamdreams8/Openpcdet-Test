@@ -57,24 +57,6 @@ def rotate_points_along_z(points, angle):
     return points_rot.numpy() if is_numpy else points_rot
 
 
-def angle2matrix(angle):
-    """
-    Args:
-        angle: angle along z-axis, angle increases x ==> y
-    Returns:
-        rot_matrix: (3x3 Tensor) rotation matrix
-    """
-
-    cosa = torch.cos(angle)
-    sina = torch.sin(angle)
-    rot_matrix = torch.tensor([
-        [cosa, -sina, 0],
-        [sina, cosa,  0],
-        [   0,    0,  1]
-    ])
-    return rot_matrix
-
-
 def mask_points_by_range(points, limit_range):
     mask = (points[:, 0] >= limit_range[0]) & (points[:, 0] <= limit_range[3]) \
            & (points[:, 1] >= limit_range[1]) & (points[:, 1] <= limit_range[4])
@@ -113,7 +95,6 @@ def create_logger(log_file=None, rank=0, log_level=logging.INFO):
         file_handler.setLevel(log_level if rank == 0 else 'ERROR')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-    logger.propagate = False
     return logger
 
 
@@ -121,18 +102,8 @@ def set_random_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
-
-def worker_init_fn(worker_id, seed=666):
-    if seed is not None:
-        random.seed(seed + worker_id)
-        np.random.seed(seed + worker_id)
-        torch.manual_seed(seed + worker_id)
-        torch.cuda.manual_seed(seed + worker_id)
-        torch.cuda.manual_seed_all(seed + worker_id)
 
 
 def get_pad_params(desired_size, cur_size):
@@ -189,16 +160,14 @@ def init_dist_slurm(tcp_port, local_rank, backend='nccl'):
 def init_dist_pytorch(tcp_port, local_rank, backend='nccl'):
     if mp.get_start_method(allow_none=True) is None:
         mp.set_start_method('spawn')
-    # os.environ['MASTER_PORT'] = str(tcp_port)
-    # os.environ['MASTER_ADDR'] = 'localhost'
+
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(local_rank % num_gpus)
-
     dist.init_process_group(
         backend=backend,
-        # init_method='tcp://127.0.0.1:%d' % tcp_port,
-        # rank=local_rank,
-        # world_size=num_gpus
+        init_method='tcp://127.0.0.1:%d' % tcp_port,
+        rank=local_rank,
+        world_size=num_gpus
     )
     rank = dist.get_rank()
     return num_gpus, rank
@@ -276,20 +245,3 @@ def sa_create(name, var):
     x.flags.writeable = False
     return x
 
-
-class AverageMeter(object):
-    """Computes and stores the average and current value"""
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count

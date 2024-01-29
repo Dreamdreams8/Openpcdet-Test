@@ -52,45 +52,8 @@ def boxes_to_corners_3d(boxes3d):
 
     return corners3d.numpy() if is_numpy else corners3d
 
-def corners_rect_to_camera(corners):
-    """
-        7 -------- 4
-       /|         /|
-      6 -------- 5 .
-      | |        | |
-      . 3 -------- 0
-      |/         |/
-      2 -------- 1
-    Args:
-        corners:  (8, 3) [x0, y0, z0, ...], (x, y, z) is the point coordinate in image rect
 
-    Returns:
-        boxes_rect:  (7,) [x, y, z, l, h, w, r] in rect camera coords
-    """
-    height_group = [(0, 4), (1, 5), (2, 6), (3, 7)]
-    width_group = [(0, 1), (2, 3), (4, 5), (6, 7)]
-    length_group = [(0, 3), (1, 2), (4, 7), (5, 6)]
-    vector_group = [(0, 3), (1, 2), (4, 7), (5, 6)]
-    height, width, length = 0., 0., 0.
-    vector = np.zeros(2, dtype=np.float32)
-    for index_h, index_w, index_l, index_v in zip(height_group, width_group, length_group, vector_group):
-        height += np.linalg.norm(corners[index_h[0], :] - corners[index_h[1], :])
-        width += np.linalg.norm(corners[index_w[0], :] - corners[index_w[1], :])
-        length += np.linalg.norm(corners[index_l[0], :] - corners[index_l[1], :])
-        vector[0] += (corners[index_v[0], :] - corners[index_v[1], :])[0]
-        vector[1] += (corners[index_v[0], :] - corners[index_v[1], :])[2]
-
-    height, width, length = height*1.0/4, width*1.0/4, length*1.0/4
-    rotation_y = -np.arctan2(vector[1], vector[0])
-
-    center_point = corners.mean(axis=0)
-    center_point[1] += height/2
-    camera_rect = np.concatenate([center_point, np.array([length, height, width, rotation_y])])
-
-    return camera_rect
-
-
-def mask_boxes_outside_range_numpy(boxes, limit_range, min_num_corners=1, use_center_to_filter=True):
+def mask_boxes_outside_range_numpy(boxes, limit_range, min_num_corners=1):
     """
     Args:
         boxes: (N, 7) [x, y, z, dx, dy, dz, heading, ...], (x, y, z) is the box center
@@ -102,14 +65,9 @@ def mask_boxes_outside_range_numpy(boxes, limit_range, min_num_corners=1, use_ce
     """
     if boxes.shape[1] > 7:
         boxes = boxes[:, 0:7]
-    if use_center_to_filter:
-        box_centers = boxes[:, 0:3]
-        mask = ((box_centers >= limit_range[0:3]) & (box_centers <= limit_range[3:6])).all(axis=-1)
-    else:
-        corners = boxes_to_corners_3d(boxes)  # (N, 8, 3)
-        corners = corners[:, :, 0:2]
-        mask = ((corners >= limit_range[0:2]) & (corners <= limit_range[3:5])).all(axis=2)
-        mask = mask.sum(axis=1) >= min_num_corners  # (N)
+    corners = boxes_to_corners_3d(boxes)  # (N, 8, 3)
+    mask = ((corners >= limit_range[0:3]) & (corners <= limit_range[3:6])).all(axis=2)
+    mask = mask.sum(axis=1) >= min_num_corners  # (N)
 
     return mask
 
@@ -338,49 +296,3 @@ def boxes3d_nearest_bev_iou(boxes_a, boxes_b):
     boxes_bev_b = boxes3d_lidar_to_aligned_bev_boxes(boxes_b)
 
     return boxes_iou_normal(boxes_bev_a, boxes_bev_b)
-
-
-def area(box) -> torch.Tensor:
-    """
-    Computes the area of all the boxes.
-
-    Returns:
-        torch.Tensor: a vector with areas of each box.
-    """
-    area = (box[:, 2] - box[:, 0]) * (box[:, 3] - box[:, 1])
-    return area
-
-
-# implementation from https://github.com/kuangliu/torchcv/blob/master/torchcv/utils/box.py
-# with slight modifications
-def pairwise_iou(boxes1, boxes2) -> torch.Tensor:
-    """
-    Given two lists of boxes of size N and M,
-    compute the IoU (intersection over union)
-    between __all__ N x M pairs of boxes.
-    The box order must be (xmin, ymin, xmax, ymax).
-
-    Args:
-        boxes1,boxes2 (Boxes): two `Boxes`. Contains N & M boxes, respectively.
-
-    Returns:
-        Tensor: IoU, sized [N,M].
-    """
-    area1 = area(boxes1)
-    area2 = area(boxes2)
-
-    width_height = torch.min(boxes1[:, None, 2:], boxes2[:, 2:]) - torch.max(
-        boxes1[:, None, :2], boxes2[:, :2]
-    )  # [N,M,2]
-
-    width_height.clamp_(min=0)  # [N,M,2]
-    inter = width_height.prod(dim=2)  # [N,M]
-    del width_height
-
-    # handle empty boxes
-    iou = torch.where(
-        inter > 0,
-        inter / (area1[:, None] + area2 - inter),
-        torch.zeros(1, dtype=inter.dtype, device=inter.device),
-    )
-    return iou

@@ -2,8 +2,7 @@ from functools import partial
 
 import numpy as np
 from skimage import transform
-import torch
-import torchvision
+
 from ...utils import box_utils, common_utils
 
 tv = None
@@ -86,8 +85,7 @@ class DataProcessor(object):
 
         if data_dict.get('gt_boxes', None) is not None and config.REMOVE_OUTSIDE_BOXES and self.training:
             mask = box_utils.mask_boxes_outside_range_numpy(
-                data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1), 
-                use_center_to_filter=config.get('USE_CENTER_TO_FILTER', True)
+                data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1)
             )
             data_dict['gt_boxes'] = data_dict['gt_boxes'][mask]
         return data_dict
@@ -103,32 +101,6 @@ class DataProcessor(object):
             data_dict['points'] = points
 
         return data_dict
-
-    def transform_points_to_voxels_placeholder(self, data_dict=None, config=None):
-        # just calculate grid size
-        if data_dict is None:
-            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.VOXEL_SIZE)
-            self.grid_size = np.round(grid_size).astype(np.int64)
-            self.voxel_size = config.VOXEL_SIZE
-            return partial(self.transform_points_to_voxels_placeholder, config=config)
-        
-        return data_dict
-
-    def double_flip(self, points):
-        # y flip
-        points_yflip = points.copy()
-        points_yflip[:, 1] = -points_yflip[:, 1]
-
-        # x flip
-        points_xflip = points.copy()
-        points_xflip[:, 0] = -points_xflip[:, 0]
-
-        # x y flip
-        points_xyflip = points.copy()
-        points_xyflip[:, 0] = -points_xyflip[:, 0]
-        points_xyflip[:, 1] = -points_xyflip[:, 1]
-
-        return points_yflip, points_xflip, points_xyflip
 
     def transform_points_to_voxels(self, data_dict=None, config=None):
         if data_dict is None:
@@ -155,28 +127,9 @@ class DataProcessor(object):
         if not data_dict['use_lead_xyz']:
             voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
 
-        if config.get('DOUBLE_FLIP', False):
-            voxels_list, voxel_coords_list, voxel_num_points_list = [voxels], [coordinates], [num_points]
-            points_yflip, points_xflip, points_xyflip = self.double_flip(points)
-            points_list = [points_yflip, points_xflip, points_xyflip]
-            keys = ['yflip', 'xflip', 'xyflip']
-            for i, key in enumerate(keys):
-                voxel_output = self.voxel_generator.generate(points_list[i])
-                voxels, coordinates, num_points = voxel_output
-
-                if not data_dict['use_lead_xyz']:
-                    voxels = voxels[..., 3:]
-                voxels_list.append(voxels)
-                voxel_coords_list.append(coordinates)
-                voxel_num_points_list.append(num_points)
-
-            data_dict['voxels'] = voxels_list
-            data_dict['voxel_coords'] = voxel_coords_list
-            data_dict['voxel_num_points'] = voxel_num_points_list
-        else:
-            data_dict['voxels'] = voxels
-            data_dict['voxel_coords'] = coordinates
-            data_dict['voxel_num_points'] = num_points
+        data_dict['voxels'] = voxels
+        data_dict['voxel_coords'] = coordinates
+        data_dict['voxel_num_points'] = num_points
         return data_dict
 
     def sample_points(self, data_dict=None, config=None):
@@ -228,56 +181,6 @@ class DataProcessor(object):
             image=data_dict['depth_maps'],
             factors=(self.depth_downsample_factor, self.depth_downsample_factor)
         )
-        return data_dict
-    
-    def image_normalize(self, data_dict=None, config=None):
-        if data_dict is None:
-            return partial(self.image_normalize, config=config)
-        mean = config.mean
-        std = config.std
-        compose = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(mean=mean, std=std),
-            ]
-        )
-        data_dict["camera_imgs"] = [compose(img) for img in data_dict["camera_imgs"]]
-        return data_dict
-    
-    def image_calibrate(self,data_dict=None, config=None):
-        if data_dict is None:
-            return partial(self.image_calibrate, config=config)
-        img_process_infos = data_dict['img_process_infos']
-        transforms = []
-        for img_process_info in img_process_infos:
-            resize, crop, flip, rotate = img_process_info
-
-            rotation = torch.eye(2)
-            translation = torch.zeros(2)
-            # post-homography transformation
-            rotation *= resize
-            translation -= torch.Tensor(crop[:2])
-            if flip:
-                A = torch.Tensor([[-1, 0], [0, 1]])
-                b = torch.Tensor([crop[2] - crop[0], 0])
-                rotation = A.matmul(rotation)
-                translation = A.matmul(translation) + b
-            theta = rotate / 180 * np.pi
-            A = torch.Tensor(
-                [
-                    [np.cos(theta), np.sin(theta)],
-                    [-np.sin(theta), np.cos(theta)],
-                ]
-            )
-            b = torch.Tensor([crop[2] - crop[0], crop[3] - crop[1]]) / 2
-            b = A.matmul(-b) + b
-            rotation = A.matmul(rotation)
-            translation = A.matmul(translation) + b
-            transform = torch.eye(4)
-            transform[:2, :2] = rotation
-            transform[:2, 3] = translation
-            transforms.append(transform.numpy())
-        data_dict["img_aug_matrix"] = transforms
         return data_dict
 
     def forward(self, data_dict):
