@@ -8,8 +8,6 @@ from tqdm import tqdm
 from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import common_utils
 from ..dataset import DatasetTemplate
-from pyquaternion import Quaternion
-from PIL import Image
 
 
 class NuScenesDataset(DatasetTemplate):
@@ -19,13 +17,6 @@ class NuScenesDataset(DatasetTemplate):
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
         self.infos = []
-        self.camera_config = self.dataset_cfg.get('CAMERA_CONFIG', None)
-        if self.camera_config is not None:
-            self.use_camera = self.camera_config.get('USE_CAMERA', True)
-            self.camera_image_config = self.camera_config.IMAGE
-        else:
-            self.use_camera = False
-
         self.include_nuscenes_data(self.mode)
         if self.training and self.dataset_cfg.get('BALANCED_RESAMPLING', False):
             self.infos = self.balanced_infos_resampling(self.infos)
@@ -117,98 +108,6 @@ class NuScenesDataset(DatasetTemplate):
         points = np.concatenate((points, times), axis=1)
         return points
 
-    def crop_image(self, input_dict):
-        W, H = input_dict["ori_shape"]
-        imgs = input_dict["camera_imgs"]
-        img_process_infos = []
-        crop_images = []
-        for img in imgs:
-            if self.training == True:
-                fH, fW = self.camera_image_config.FINAL_DIM
-                resize_lim = self.camera_image_config.RESIZE_LIM_TRAIN
-                resize = np.random.uniform(*resize_lim)
-                resize_dims = (int(W * resize), int(H * resize))
-                newW, newH = resize_dims
-                crop_h = newH - fH
-                crop_w = int(np.random.uniform(0, max(0, newW - fW)))
-                crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
-            else:
-                fH, fW = self.camera_image_config.FINAL_DIM
-                resize_lim = self.camera_image_config.RESIZE_LIM_TEST
-                resize = np.mean(resize_lim)
-                resize_dims = (int(W * resize), int(H * resize))
-                newW, newH = resize_dims
-                crop_h = newH - fH
-                crop_w = int(max(0, newW - fW) / 2)
-                crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
-            
-            # reisze and crop image
-            img = img.resize(resize_dims)
-            img = img.crop(crop)
-            crop_images.append(img)
-            img_process_infos.append([resize, crop, False, 0])
-        
-        input_dict['img_process_infos'] = img_process_infos
-        input_dict['camera_imgs'] = crop_images
-        return input_dict
-    
-    def load_camera_info(self, input_dict, info):
-        input_dict["image_paths"] = []
-        input_dict["lidar2camera"] = []
-        input_dict["lidar2image"] = []
-        input_dict["camera2ego"] = []
-        input_dict["camera_intrinsics"] = []
-        input_dict["camera2lidar"] = []
-
-        for _, camera_info in info["cams"].items():
-            input_dict["image_paths"].append(camera_info["data_path"])
-
-            # lidar to camera transform
-            lidar2camera_r = np.linalg.inv(camera_info["sensor2lidar_rotation"])
-            lidar2camera_t = (
-                camera_info["sensor2lidar_translation"] @ lidar2camera_r.T
-            )
-            lidar2camera_rt = np.eye(4).astype(np.float32)
-            lidar2camera_rt[:3, :3] = lidar2camera_r.T
-            lidar2camera_rt[3, :3] = -lidar2camera_t
-            input_dict["lidar2camera"].append(lidar2camera_rt.T)
-
-            # camera intrinsics
-            camera_intrinsics = np.eye(4).astype(np.float32)
-            camera_intrinsics[:3, :3] = camera_info["camera_intrinsics"]
-            input_dict["camera_intrinsics"].append(camera_intrinsics)
-
-            # lidar to image transform
-            lidar2image = camera_intrinsics @ lidar2camera_rt.T
-            input_dict["lidar2image"].append(lidar2image)
-
-            # camera to ego transform
-            camera2ego = np.eye(4).astype(np.float32)
-            camera2ego[:3, :3] = Quaternion(
-                camera_info["sensor2ego_rotation"]
-            ).rotation_matrix
-            camera2ego[:3, 3] = camera_info["sensor2ego_translation"]
-            input_dict["camera2ego"].append(camera2ego)
-
-            # camera to lidar transform
-            camera2lidar = np.eye(4).astype(np.float32)
-            camera2lidar[:3, :3] = camera_info["sensor2lidar_rotation"]
-            camera2lidar[:3, 3] = camera_info["sensor2lidar_translation"]
-            input_dict["camera2lidar"].append(camera2lidar)
-        # read image
-        filename = input_dict["image_paths"]
-        images = []
-        for name in filename:
-            images.append(Image.open(str(self.root_path / name)))
-        
-        input_dict["camera_imgs"] = images
-        input_dict["ori_shape"] = images[0].size
-        
-        # resize and crop image
-        input_dict = self.crop_image(input_dict)
-
-        return input_dict
-
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
             return len(self.infos) * self.total_epochs
@@ -238,12 +137,10 @@ class NuScenesDataset(DatasetTemplate):
                 'gt_names': info['gt_names'] if mask is None else info['gt_names'][mask],
                 'gt_boxes': info['gt_boxes'] if mask is None else info['gt_boxes'][mask]
             })
-        if self.use_camera:
-            input_dict = self.load_camera_info(input_dict, info)
 
         data_dict = self.prepare_data(data_dict=input_dict)
 
-        if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False) and 'gt_boxes' in info:
+        if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False):
             gt_boxes = data_dict['gt_boxes']
             gt_boxes[np.isnan(gt_boxes)] = 0
             data_dict['gt_boxes'] = gt_boxes
@@ -252,6 +149,51 @@ class NuScenesDataset(DatasetTemplate):
             data_dict['gt_boxes'] = data_dict['gt_boxes'][:, [0, 1, 2, 3, 4, 5, 6, -1]]
 
         return data_dict
+
+    @staticmethod
+    def generate_prediction_dicts(batch_dict, pred_dicts, class_names, output_path=None):
+        """
+        Args:
+            batch_dict:
+                frame_id:
+            pred_dicts: list of pred_dicts
+                pred_boxes: (N, 7), Tensor
+                pred_scores: (N), Tensor
+                pred_labels: (N), Tensor
+            class_names:
+            output_path:
+        Returns:
+        """
+        def get_template_prediction(num_samples):
+            ret_dict = {
+                'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
+                'boxes_lidar': np.zeros([num_samples, 7]), 'pred_labels': np.zeros(num_samples)
+            }
+            return ret_dict
+
+        def generate_single_sample_dict(box_dict):
+            pred_scores = box_dict['pred_scores'].cpu().numpy()
+            pred_boxes = box_dict['pred_boxes'].cpu().numpy()
+            pred_labels = box_dict['pred_labels'].cpu().numpy()
+            pred_dict = get_template_prediction(pred_scores.shape[0])
+            if pred_scores.shape[0] == 0:
+                return pred_dict
+
+            pred_dict['name'] = np.array(class_names)[pred_labels - 1]
+            pred_dict['score'] = pred_scores
+            pred_dict['boxes_lidar'] = pred_boxes
+            pred_dict['pred_labels'] = pred_labels
+
+            return pred_dict
+
+        annos = []
+        for index, box_dict in enumerate(pred_dicts):
+            single_pred_dict = generate_single_sample_dict(box_dict)
+            single_pred_dict['frame_id'] = batch_dict['frame_id'][index]
+            single_pred_dict['metadata'] = batch_dict['metadata'][index]
+            annos.append(single_pred_dict)
+
+        return annos
 
     def evaluation(self, det_annos, class_names, **kwargs):
         import json
@@ -354,7 +296,7 @@ class NuScenesDataset(DatasetTemplate):
             pickle.dump(all_db_infos, f)
 
 
-def create_nuscenes_info(version, data_path, save_path, max_sweeps=10, with_cam=False):
+def create_nuscenes_info(version, data_path, save_path, max_sweeps=10):
     from nuscenes.nuscenes import NuScenes
     from nuscenes.utils import splits
     from . import nuscenes_utils
@@ -386,7 +328,7 @@ def create_nuscenes_info(version, data_path, save_path, max_sweeps=10, with_cam=
 
     train_nusc_infos, val_nusc_infos = nuscenes_utils.fill_trainval_infos(
         data_path=data_path, nusc=nusc, train_scenes=train_scenes, val_scenes=val_scenes,
-        test='test' in version, max_sweeps=max_sweeps, with_cam=with_cam
+        test='test' in version, max_sweeps=max_sweeps
     )
 
     if version == 'v1.0-test':
@@ -411,11 +353,10 @@ if __name__ == '__main__':
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config of dataset')
     parser.add_argument('--func', type=str, default='create_nuscenes_infos', help='')
     parser.add_argument('--version', type=str, default='v1.0-trainval', help='')
-    parser.add_argument('--with_cam', action='store_true', default=False, help='use camera or not')
     args = parser.parse_args()
 
     if args.func == 'create_nuscenes_infos':
-        dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
+        dataset_cfg = EasyDict(yaml.load(open(args.cfg_file)))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         dataset_cfg.VERSION = args.version
         create_nuscenes_info(
@@ -423,7 +364,6 @@ if __name__ == '__main__':
             data_path=ROOT_DIR / 'data' / 'nuscenes',
             save_path=ROOT_DIR / 'data' / 'nuscenes',
             max_sweeps=dataset_cfg.MAX_SWEEPS,
-            with_cam=args.with_cam
         )
 
         nuscenes_dataset = NuScenesDataset(

@@ -161,6 +161,7 @@ class CustomDataset(DatasetTemplate):
         sample_id_list = sample_id_list if sample_id_list is not None else self.sample_id_list
 
         # create a thread pool to improve the velocity
+        # print("sample_id_list len = ",sample_id_list.len)
         with futures.ThreadPoolExecutor(num_workers) as executor:
             infos = executor.map(process_single_scene, sample_id_list)
         return list(infos)

@@ -2,8 +2,7 @@ CLASS_NAMES: ['Car', 'Truck']
 
 DATA_CONFIG: 
     _BASE_CONFIG_: cfgs/dataset_configs/custom_dataset.yaml
-    # POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]                 #[-x,-y,-z,x,y,z]
-    POINT_CLOUD_RANGE: [-69.12, -39.68, 0, 69.12, 39.68, 4]                 #[-x,-y,-z,x,y,z]
+    POINT_CLOUD_RANGE: [-69.12, -39.68, 0, 69.12, 39.68, 4]
     DATA_PROCESSOR:
         - NAME: mask_points_and_boxes_outside_range
           REMOVE_OUTSIDE_BOXES: True
@@ -16,7 +15,7 @@ DATA_CONFIG:
 
         - NAME: transform_points_to_voxels
           VOXEL_SIZE: [0.16, 0.16, 4]
-          MAX_POINTS_PER_VOXEL: 96             #给定每个pillar中最多能有多少个点 32
+          MAX_POINTS_PER_VOXEL: 32
           MAX_NUMBER_OF_VOXELS: {
             'train': 16000,
             'test': 40000
@@ -29,23 +28,23 @@ DATA_CONFIG:
               DB_INFO_PATH:
                   - custom_dbinfos_train.pkl
               PREPARE: {
-                 filter_by_min_points: ['Car:5',  'Truck:5'],
+                 filter_by_min_points: ['Car:5', 'Truck:5'],
                  filter_by_difficulty: [-1],
               }
 
-              SAMPLE_GROUPS: ['Car:15','Truck:20']              #将其它帧gt的点云以及box放入待训练帧中的空余位置。
+              SAMPLE_GROUPS: ['Car:15','Truck:15']
               NUM_POINT_FEATURES: 4
               DATABASE_WITH_FAKELIDAR: False
               REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
               LIMIT_WHOLE_SCENE: False
 
-            - NAME: random_world_flip           # 沿着x轴镜像翻转，翻转概率为50%。
+            - NAME: random_world_flip
               ALONG_AXIS_LIST: ['x']
 
-            - NAME: random_world_rotation             ##绕z轴旋转，值为弧度
-              WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]           
+            - NAME: random_world_rotation
+              WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
 
-            - NAME: random_world_scaling              #进行尺度缩放
+            - NAME: random_world_scaling
               WORLD_SCALE_RANGE: [0.95, 1.05]
 
 MODEL:
@@ -82,10 +81,9 @@ MODEL:
         ANCHOR_GENERATOR_CONFIG: [
             {
                 'class_name': 'Car',
-                'anchor_sizes': [[3.9, 2.04, 1.61]],
+                'anchor_sizes': [[3.9, 1.6, 1.56]],
                 'anchor_rotations': [0, 1.57],
-                # 'anchor_bottom_heights': [-1.70],
-                'anchor_bottom_heights': [-0.5],
+                'anchor_bottom_heights': [-1.78],
                 'align_center': False,
                 'feature_map_stride': 2,
                 'matched_threshold': 0.6,
@@ -93,10 +91,9 @@ MODEL:
             },
             {
                 'class_name': 'Truck',
-                'anchor_sizes': [[15, 2.86, 3.08]],
+                'anchor_sizes': [[15, 2.7, 4]],
                 'anchor_rotations': [0, 1.57],
-                # 'anchor_bottom_heights': [-1.7],
-                'anchor_bottom_heights': [-0.5],
+                'anchor_bottom_heights': [-1.7],
                 'align_center': False,
                 'feature_map_stride': 2,
                 'matched_threshold': 0.5,
@@ -122,7 +119,7 @@ MODEL:
 
     POST_PROCESSING:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
-        SCORE_THRESH: 0.1
+        SCORE_THRESH: 0.6
         OUTPUT_RAW_SCORE: False
 
         EVAL_METRIC: kitti
@@ -130,14 +127,14 @@ MODEL:
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
-            NMS_THRESH: 0.01
+            NMS_THRESH: 0.6
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
 
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 2
-    NUM_EPOCHS: 480
+    NUM_EPOCHS: 500
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

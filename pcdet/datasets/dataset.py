@@ -2,7 +2,6 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
-import torch
 import torch.utils.data as torch_data
 
 from ..utils import common_utils
@@ -45,7 +44,7 @@ class DatasetTemplate(torch_data.Dataset):
             self.depth_downsample_factor = self.data_processor.depth_downsample_factor
         else:
             self.depth_downsample_factor = None
-            
+
     @property
     def mode(self):
         return 'train' if self.training else 'test'
@@ -58,54 +57,23 @@ class DatasetTemplate(torch_data.Dataset):
     def __setstate__(self, d):
         self.__dict__.update(d)
 
-    def generate_prediction_dicts(self, batch_dict, pred_dicts, class_names, output_path=None):
+    @staticmethod
+    def generate_prediction_dicts(batch_dict, pred_dicts, class_names, output_path=None):
         """
+        To support a custom dataset, implement this function to receive the predicted results from the model, and then
+        transform the unified normative coordinate to your required coordinate, and optionally save them to disk.
+
         Args:
-            batch_dict:
-                frame_id:
-            pred_dicts: list of pred_dicts
-                pred_boxes: (N, 7 or 9), Tensor
+            batch_dict: dict of original data from the dataloader
+            pred_dicts: dict of predicted results from the model
+                pred_boxes: (N, 7), Tensor
                 pred_scores: (N), Tensor
                 pred_labels: (N), Tensor
             class_names:
-            output_path:
-
+            output_path: if it is not None, save the results to this path
         Returns:
 
         """
-        
-        def get_template_prediction(num_samples):
-            box_dim = 9 if self.dataset_cfg.get('TRAIN_WITH_SPEED', False) else 7
-            ret_dict = {
-                'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
-                'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples)
-            }
-            return ret_dict
-
-        def generate_single_sample_dict(box_dict):
-            pred_scores = box_dict['pred_scores'].cpu().numpy()
-            pred_boxes = box_dict['pred_boxes'].cpu().numpy()
-            pred_labels = box_dict['pred_labels'].cpu().numpy()
-            pred_dict = get_template_prediction(pred_scores.shape[0])
-            if pred_scores.shape[0] == 0:
-                return pred_dict
-
-            pred_dict['name'] = np.array(class_names)[pred_labels - 1]
-            pred_dict['score'] = pred_scores
-            pred_dict['boxes_lidar'] = pred_boxes
-            pred_dict['pred_labels'] = pred_labels
-
-            return pred_dict
-
-        annos = []
-        for index, box_dict in enumerate(pred_dicts):
-            single_pred_dict = generate_single_sample_dict(box_dict)
-            single_pred_dict['frame_id'] = batch_dict['frame_id'][index]
-            if 'metadata' in batch_dict:
-                single_pred_dict['metadata'] = batch_dict['metadata'][index]
-            annos.append(single_pred_dict)
-
-        return annos
 
     def merge_all_iters_to_one_epoch(self, merge=True, epochs=None):
         if merge:
@@ -131,30 +99,6 @@ class DatasetTemplate(torch_data.Dataset):
         """
         raise NotImplementedError
 
-    def set_lidar_aug_matrix(self, data_dict):
-        """
-            Get lidar augment matrix (4 x 4), which are used to recover orig point coordinates.
-        """
-        lidar_aug_matrix = np.eye(4)
-        if 'flip_y' in data_dict.keys():
-            flip_x = data_dict['flip_x']
-            flip_y = data_dict['flip_y']
-            if flip_x:
-                lidar_aug_matrix[:3,:3] = np.array([[1, 0, 0], [0, -1, 0], [0, 0, 1]]) @ lidar_aug_matrix[:3,:3]
-            if flip_y:
-                lidar_aug_matrix[:3,:3] = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]) @ lidar_aug_matrix[:3,:3]
-        if 'noise_rot' in data_dict.keys():
-            noise_rot = data_dict['noise_rot']
-            lidar_aug_matrix[:3,:3] = common_utils.angle2matrix(torch.tensor(noise_rot)) @ lidar_aug_matrix[:3,:3]
-        if 'noise_scale' in data_dict.keys():
-            noise_scale = data_dict['noise_scale']
-            lidar_aug_matrix[:3,:3] *= noise_scale
-        if 'noise_translate' in data_dict.keys():
-            noise_translate = data_dict['noise_translate']
-            lidar_aug_matrix[:3,3:4] = noise_translate.T
-        data_dict['lidar_aug_matrix'] = lidar_aug_matrix
-        return data_dict
-
     def prepare_data(self, data_dict):
         """
         Args:
@@ -179,18 +123,14 @@ class DatasetTemplate(torch_data.Dataset):
         if self.training:
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
             gt_boxes_mask = np.array([n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-            
-            if 'calib' in data_dict:
-                calib = data_dict['calib']
+
             data_dict = self.data_augmentor.forward(
                 data_dict={
                     **data_dict,
                     'gt_boxes_mask': gt_boxes_mask
                 }
             )
-            if 'calib' in data_dict:
-                data_dict['calib'] = calib
-        data_dict = self.set_lidar_aug_matrix(data_dict)
+
         if data_dict.get('gt_boxes', None) is not None:
             selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
@@ -225,19 +165,13 @@ class DatasetTemplate(torch_data.Dataset):
                 data_dict[key].append(val)
         batch_size = len(batch_list)
         ret = {}
-        batch_size_ratio = 1
 
         for key, val in data_dict.items():
             try:
                 if key in ['voxels', 'voxel_num_points']:
-                    if isinstance(val[0], list):
-                        batch_size_ratio = len(val[0])
-                        val = [i for item in val for i in item]
                     ret[key] = np.concatenate(val, axis=0)
                 elif key in ['points', 'voxel_coords']:
                     coors = []
-                    if isinstance(val[0], list):
-                        val =  [i for item in val for i in item]
                     for i, coor in enumerate(val):
                         coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                         coors.append(coor_pad)
@@ -248,21 +182,6 @@ class DatasetTemplate(torch_data.Dataset):
                     for k in range(batch_size):
                         batch_gt_boxes3d[k, :val[k].__len__(), :] = val[k]
                     ret[key] = batch_gt_boxes3d
-
-                elif key in ['roi_boxes']:
-                    max_gt = max([x.shape[1] for x in val])
-                    batch_gt_boxes3d = np.zeros((batch_size, val[0].shape[0], max_gt, val[0].shape[-1]), dtype=np.float32)
-                    for k in range(batch_size):
-                        batch_gt_boxes3d[k,:, :val[k].shape[1], :] = val[k]
-                    ret[key] = batch_gt_boxes3d
-
-                elif key in ['roi_scores', 'roi_labels']:
-                    max_gt = max([x.shape[1] for x in val])
-                    batch_gt_boxes3d = np.zeros((batch_size, val[0].shape[0], max_gt), dtype=np.float32)
-                    for k in range(batch_size):
-                        batch_gt_boxes3d[k,:, :val[k].shape[1]] = val[k]
-                    ret[key] = batch_gt_boxes3d
-
                 elif key in ['gt_boxes2d']:
                     max_boxes = 0
                     max_boxes = max([len(x) for x in val])
@@ -285,7 +204,8 @@ class DatasetTemplate(torch_data.Dataset):
                         pad_h = common_utils.get_pad_params(desired_size=max_h, cur_size=image.shape[0])
                         pad_w = common_utils.get_pad_params(desired_size=max_w, cur_size=image.shape[1])
                         pad_width = (pad_h, pad_w)
-                        pad_value = 0
+                        # Pad with nan, to be replaced later in the pipeline.
+                        pad_value = np.nan
 
                         if key == "images":
                             pad_width = (pad_h, pad_w, (0, 0))
@@ -299,27 +219,11 @@ class DatasetTemplate(torch_data.Dataset):
 
                         images.append(image_pad)
                     ret[key] = np.stack(images, axis=0)
-                elif key in ['calib']:
-                    ret[key] = val
-                elif key in ["points_2d"]:
-                    max_len = max([len(_val) for _val in val])
-                    pad_value = 0
-                    points = []
-                    for _points in val:
-                        pad_width = ((0, max_len-len(_points)), (0,0))
-                        points_pad = np.pad(_points,
-                                pad_width=pad_width,
-                                mode='constant',
-                                constant_values=pad_value)
-                        points.append(points_pad)
-                    ret[key] = np.stack(points, axis=0)
-                elif key in ['camera_imgs']:
-                    ret[key] = torch.stack([torch.stack(imgs,dim=0) for imgs in val],dim=0)
                 else:
                     ret[key] = np.stack(val, axis=0)
             except:
                 print('Error in collate_batch: key=%s' % key)
                 raise TypeError
 
-        ret['batch_size'] = batch_size * batch_size_ratio
+        ret['batch_size'] = batch_size
         return ret

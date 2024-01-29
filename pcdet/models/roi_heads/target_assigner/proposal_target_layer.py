@@ -71,7 +71,7 @@ class ProposalTargetLayer(nn.Module):
                 gt_boxes: (B, N, 7 + C + 1)
                 roi_labels: (B, num_rois)
         Returns:
-        
+
         """
         batch_size = batch_dict['batch_size']
         rois = batch_dict['rois']
@@ -90,7 +90,7 @@ class ProposalTargetLayer(nn.Module):
             cur_roi, cur_gt, cur_roi_labels, cur_roi_scores = \
                 rois[index], gt_boxes[index], roi_labels[index], roi_scores[index]
             k = cur_gt.__len__() - 1
-            while k >= 0 and cur_gt[k].sum() == 0:
+            while k > 0 and cur_gt[k].sum() == 0:
                 k -= 1
             cur_gt = cur_gt[:k + 1]
             cur_gt = cur_gt.new_zeros((1, cur_gt.shape[1])) if len(cur_gt) == 0 else cur_gt
@@ -145,7 +145,7 @@ class ProposalTargetLayer(nn.Module):
             rand_num = np.floor(np.random.rand(self.roi_sampler_cfg.ROI_PER_IMAGE) * fg_num_rois)
             rand_num = torch.from_numpy(rand_num).type_as(max_overlaps).long()
             fg_inds = fg_inds[rand_num]
-            bg_inds = fg_inds[fg_inds < 0] # yield empty tensor
+            bg_inds = []
 
         elif bg_num_rois > 0 and fg_num_rois == 0:
             # sampling bg
@@ -199,9 +199,9 @@ class ProposalTargetLayer(nn.Module):
             roi_labels: (N)
             gt_boxes: (N, )
             gt_labels:
-            
+
         Returns:
-        
+
         """
         """
         :param rois: (N, 7)
@@ -220,7 +220,7 @@ class ProposalTargetLayer(nn.Module):
                 cur_gt = gt_boxes[gt_mask]
                 original_gt_assignment = gt_mask.nonzero().view(-1)
 
-                iou3d = iou3d_nms_utils.boxes_iou3d_gpu(cur_roi[:, :7], cur_gt[:, :7])  # (M, N)
+                iou3d = iou3d_nms_utils.boxes_iou3d_gpu(cur_roi, cur_gt)  # (M, N)
                 cur_max_overlaps, cur_gt_assignment = torch.max(iou3d, dim=1)
                 max_overlaps[roi_mask] = cur_max_overlaps
                 gt_assignment[roi_mask] = original_gt_assignment[cur_gt_assignment]

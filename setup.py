@@ -28,7 +28,7 @@ def write_version_to_file(version, target_file):
 
 
 if __name__ == '__main__':
-    version = '0.6.0+%s' % get_git_commit_number()
+    version = '0.5.0+%s' % get_git_commit_number()
     write_version_to_file(version, 'pcdet/version.py')
 
     setup(
@@ -36,7 +36,7 @@ if __name__ == '__main__':
         version=version,
         description='OpenPCDet is a general codebase for 3D object detection from point cloud',
         install_requires=[
-            'numpy',
+            'numpy<=1.20',
             'llvmlite',
             'numba',
             'tensorboardX',
@@ -97,8 +97,6 @@ if __name__ == '__main__':
                     'src/interpolate_gpu.cu',
                     'src/voxel_query.cpp', 
                     'src/voxel_query_gpu.cu',
-                    'src/vector_pool.cpp',
-                    'src/vector_pool_gpu.cu'
                 ],
             ),
             make_cuda_ext(
@@ -116,22 +114,6 @@ if __name__ == '__main__':
                     'src/sampling_gpu.cu',
 
                 ],
-            ),
-            make_cuda_ext(
-                name="bev_pool_ext",
-                module="pcdet.ops.bev_pool",
-                sources=[
-                    "src/bev_pool.cpp",
-                    "src/bev_pool_cuda.cu",
-                ],
-            ),
-            make_cuda_ext(
-                name='ingroup_inds_cuda',
-                module='pcdet.ops.ingroup_inds',
-                sources=[
-                    'src/ingroup_inds.cpp',
-                    'src/ingroup_inds_kernel.cu',
-                ]
             ),
         ],
     )

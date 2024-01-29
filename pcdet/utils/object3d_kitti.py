@@ -3,13 +3,13 @@ import numpy as np
 
 def get_objects_from_label(label_file):
     with open(label_file, 'r') as f:
-        lines = f.readlines()  
+        lines = f.readlines()
     objects = [Object3d(line) for line in lines]
     return objects
 
 
 def cls_type_to_id(cls_type):
-    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Cyclist': 3, 'Van': 4}
+    type_to_id = {'Car': 1, 'Pedestrian': 2, 'Truck': 3, 'Van': 4}
     if cls_type not in type_to_id.keys():
         return -1
     return type_to_id[cls_type]
