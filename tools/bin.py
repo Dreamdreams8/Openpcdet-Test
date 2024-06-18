@@ -9,7 +9,7 @@ import open3d
 import torch
 import matplotlib
 import numpy as np
-
+import open3d as o3d
 box_colormap = [
     [1, 1, 1],
     [0, 1, 0],
@@ -110,8 +110,8 @@ def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, score=None):
     # vis.add_3d_label(corners[5], '%.2f' % score[i])
     return vis
 
-def main():
-    points = np.fromfile("/home/macs/gzp/openPCDet/data/KITTI/velodyne_reduced/000000.bin", dtype=np.float32).reshape(-1, 4)
+def bin_show():
+    points = np.fromfile("/home/dell2/why/OpenPCdet_alg/perception-alg/data/deep_learning_detection/side_lidar_bin/1718335225.542930.bin", dtype=np.float32).reshape(-1, 4)
     ref_boxes=np.array([[ 14.7530,-1.0668,-0.7949, 3.7316, 1.5734, 1.5017, 5.9684],
         [8.1338, 1.2251,-0.8056, 3.7107, 1.5718, 1.6053, 2.8312],
         [6.4539,-3.8711,-1.0125, 2.9638, 1.5000, 1.4587, 6.0006],
@@ -153,5 +153,13 @@ def main():
     print(ref_scores)
     draw_scenes(points=points,ref_boxes=ref_boxes,ref_scores=ref_scores, ref_labels=ref_labels)
 
+def pcd_show():
+    # 加载PCD文件
+    pcd = o3d.io.read_point_cloud("/home/dell2/why/OpenPCdet_alg/perception-alg/data/deep_learning_detection/side_lidar/1718335225.542930.pcd")
+
+    # 可视化点云
+    o3d.visualization.draw_geometries([pcd])
+
 if __name__ == '__main__':
-    main()
+    bin_show()
+    # pcd_show()

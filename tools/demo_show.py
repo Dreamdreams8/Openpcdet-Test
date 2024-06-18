@@ -40,6 +40,7 @@ class DemoDataset(DatasetTemplate):
         data_file_list = glob.glob(str(root_path / f'*{self.ext}')) if self.root_path.is_dir() else [self.root_path]
 
         data_file_list.sort()
+        # print("-------------------------------------------------------------:  ", data_file_list)
         self.sample_file_list = data_file_list
 
     def __len__(self):
@@ -54,6 +55,7 @@ class DemoDataset(DatasetTemplate):
         else:
             raise NotImplementedError
         (filename,extension) = os.path.splitext(os.path.split(self.sample_file_list[index])[-1])
+        # print("+++++++++++++++++++++++++++++:  ",filename)
         input_dict = {
             'points': points,
             'frame_id': index,
@@ -68,7 +70,7 @@ def parse_config():
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pointpillar.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default='/home/why/mnt/github_demo/OpenPCDet/data/kitti/trainning/velodyne/000000.bin',
+    parser.add_argument('--data_path', type=str, default='/home/mnt/github_demo/OpenPCDet/data/kitti/trainning/velodyne/000000.bin',
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default="../checkpoints/pointpillar_7728.pth", help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
@@ -81,7 +83,8 @@ def parse_config():
 
 
 def main():
-    labels_path = "SUSTechPOINTS/data/merge_pcd_label/label2"
+    # labels_path = "/home/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data/merge_pcd_label/label2"
+    labels_path = "/home/mnt/github_demo/labelcloud/SUSTechPOINTS/SUSTechPOINTS/data_test/custom/label"
     map_class = {
         "1" : "Car",
         "2" : "Truck"
